@@ -5,5 +5,8 @@ import (
 )
 
 func main() {
-	assistant.Start()
+	err := assistant.Start()
+	if err != nil {
+		panic(err)
+	}
 }
