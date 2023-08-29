@@ -34,7 +34,7 @@ func Start() error {
 			return err
 		}
 		assistant.Prompt(answer)
-		assistant.oracle.GiveExample(line, answer)
+		assistant.Remember(line, answer)
 	}
 	assistant.Prompt("Goodbye!")
 	return nil
@@ -42,4 +42,8 @@ func Start() error {
 
 func (a *Assistant) Prompt(prompt string) {
 	fmt.Fprint(a.output, "ASSISTANT) ", prompt, "\nUSER) ")
+}
+
+func (a *Assistant) Remember(question string, answer string) {
+	a.oracle.GiveExample(question, answer)
 }
