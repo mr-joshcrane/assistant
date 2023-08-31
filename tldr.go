@@ -8,10 +8,8 @@ import (
 	"github.com/mr-joshcrane/oracle"
 )
 
-func TLDR(url string) (string, error) {
-	o := oracle.NewOracle()
+func TLDR(o *oracle.Oracle, url string) (string, error) {
 	o.SetPurpose("Please summarise the provided text as best you can. The shorter the better.")
-
 	content, err := GetContent(url)
 	if err != nil {
 		return "", err

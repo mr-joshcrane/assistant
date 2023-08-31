@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httputil"
 	"os"
 
 	"github.com/mr-joshcrane/oracle"
@@ -16,7 +18,7 @@ type Assistant struct {
 }
 
 func Start() error {
-	o := oracle.NewOracle()
+	o := oracle.NewOracle(os.Getenv("OPENAI_API_KEY"))
 	assistant := &Assistant{
 		oracle: o,
 		input:  os.Stdin,
@@ -47,3 +49,67 @@ func (a *Assistant) Prompt(prompt string) {
 func (a *Assistant) Remember(question string, answer string) {
 	a.oracle.GiveExample(question, answer)
 }
+
+type TLDRServer struct {
+	oracle     *oracle.Oracle
+	httpServer *http.Server
+}
+
+func NewTLDRServer(o *oracle.Oracle, addr string) *TLDRServer {
+	s := &TLDRServer{
+		oracle: o,
+		httpServer: &http.Server{
+			Addr: addr,
+		},
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/chat/", s.chatHandler)
+	mux.HandleFunc("/", s.indexHandler)
+
+	s.httpServer.Handler = mux
+	return s
+}
+
+func (s *TLDRServer) indexHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "TLDR")
+}
+
+func (s *TLDRServer) chatHandler(w http.ResponseWriter, r *http.Request) {
+	req, err := httputil.DumpRequest(r, true)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fmt.Println(string(req))
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	defer r.Body.Close()
+	err = r.ParseForm()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+	url := r.FormValue("summaryUrl")
+
+	fmt.Println("url: ", url)
+	summary, err := TLDR(s.oracle, url)
+	if err != nil {
+		fmt.Println(err)
+		http.Error(w, err.Error(), http.StatusBadGateway)
+	}
+	htmlFragment := fmt.Sprintf("<div class='results'><h3><a href='%s' target='_blank'>%s</a></h3>%s</div>", url, url, summary)
+
+	fmt.Fprintf(w, "%s", htmlFragment)
+
+}
+
+func (s *TLDRServer) ListenAndServe() error {
+	return s.httpServer.ListenAndServe()
+}
+
+func (s *TLDRServer) Shutdown() error {
+	return s.httpServer.Shutdown(nil)
+}
+
+// mux := http.NewServeMux()
