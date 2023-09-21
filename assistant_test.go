@@ -2,11 +2,8 @@ package assistant_test
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"io"
-	"net"
-	"net/http"
-	"net/http/httputil"
 	"strings"
 	"testing"
 
@@ -14,85 +11,44 @@ import (
 	"github.com/mr-joshcrane/oracle"
 )
 
-// func TestStart(t *testing.T) {
-// 	t.Parallel()
-// 	addr := newTestTLDRServer(t)
-// 	resp, err := http.Get("http://" + addr)
-// 	if err != nil {
-// 		t.Errorf("Expected no error, got %v", err)
-// 	}
-// 	if resp.StatusCode != http.StatusOK {
-// 		t.Errorf("Expected status code %v, got %v", http.StatusOK, resp.StatusCode)
-// 	}
-// 	defer resp.Body.Close()
-// 	data, err := io.ReadAll(resp.Body)
-// 	if err != nil {
-// 		t.Errorf("Expected no error, got %v", err)
-// 	}
-// 	if !bytes.Contains(data, []byte("TLDR")) {
-// 		t.Errorf("Expected %s to contain %s", data, "TLDR")
-// 	}
-// }
-
-// func TestChatHandlerOnlyAcceptsPost(t *testing.T) {
-// 	t.Parallel()
-// 	addr := newTestTLDRServer(t)
-// 	resp, err := http.Get("http://" + addr + "/api/chat")
-// 	if err != nil {
-// 		t.Errorf("Expected no error, got %v", err)
-// 	}
-// 	if resp.StatusCode != http.StatusMethodNotAllowed {
-// 		t.Errorf("Expected status code %v, got %v", http.StatusMethodNotAllowed, resp.StatusCode)
-// 	}
-// }
-
-func TestChatHandlerAcceptsPost(t *testing.T) {
-	t.Parallel()
-	addr := newTestTLDRServer(t)
-	fmt.Println(addr)
-	req, err := http.NewRequest(http.MethodPost, "http://"+addr+"/api/chat", strings.NewReader("hello"))
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-	dump, err := httputil.DumpRequest(req, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	fmt.Println(string(dump))
-	resp, err := http.Post("http://"+addr+"/api/chat/", "text/plain", strings.NewReader("hello"))
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Expected status code %v, got %v", http.StatusOK, resp.StatusCode)
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-	if !bytes.Contains(data, []byte("https://example.com")) {
-		t.Fatalf("Expected %s to contain %s", data, "https://example.com")
+func newTestAssistant(t *testing.T) assistant.Assistant {
+	t.Helper()
+	o := oracle.NewOracle("", oracle.WithDummyClient("fixed response", 200))
+	return assistant.Assistant{
+		Oracle: o,
+		Input:  new(bytes.Buffer),
+		Output: new(bytes.Buffer),
 	}
 }
 
-func newTestTLDRServer(t *testing.T) string {
-	t.Helper()
-	l, err := net.Listen("tcp", ":0")
-	if err != nil {
-		t.Fatalf("Expected no error opening listener, got %v", err)
+func TestAssistant_StartCanBeTerminatedWithExit(t *testing.T) {
+	t.Parallel()
+	a := newTestAssistant(t)
+	a.Input = io.ReadWriter(bytes.NewBufferString("exit\n"))
+	err := a.Start()
+	if !errors.Is(err, io.EOF) {
+		t.Fatal(err)
 	}
-	addr := l.Addr().String()
-	l.Close()
-	o := oracle.NewOracle("dummy-key")
-	srv := assistant.NewTLDRServer(o, addr)
-	go func() {
-		err := srv.ListenAndServe()
-		if err != http.ErrServerClosed && err != nil {
-			panic(err)
-		}
-	}()
-	t.Cleanup(func() { srv.Shutdown() })
-	return addr
+}
+
+func TestAssistant_AsksForUserInput(t *testing.T) {
+	t.Parallel()
+	a := newTestAssistant(t)
+	_ = a.Start()
+	a.Input = io.ReadWriter(bytes.NewBufferString("exit\n"))
+	got := a.Output.(*bytes.Buffer).String()
+	if !strings.Contains(got, "ASSISTANT) ") {
+		t.Fatal("expected assistant to ask for user input")
+	}
+}
+
+func TestAssistant_GivesAResponse(t *testing.T) {
+	t.Parallel()
+	a := newTestAssistant(t)
+	a.Input = io.ReadWriter(bytes.NewBufferString("test\nexit\n"))
+	_ = a.Start()
+	got := a.Output.(*bytes.Buffer).String()
+	if !strings.Contains(got, "fixed response") {
+		t.Fatal("expected assistant to give a response")
+	}
 }
