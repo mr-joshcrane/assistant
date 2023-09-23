@@ -76,3 +76,19 @@ func TestAsk_StopsTalkingWhenRequestCancelled(t *testing.T) {
 		t.Fatalf("expected assistant to stop talking, got %s", got)
 	}
 }
+
+func TestAuditLog_CapturesAssistantInputOutput(t *testing.T) {
+	t.Parallel()
+	a := newTestAssistant(t)
+	a.Input = io.ReadWriter(bytes.NewBufferString("test\nexit\n"))
+	buf := new(bytes.Buffer)
+	a.AuditLog = buf
+	err := a.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := buf.String()
+	if !strings.Contains(got, "womple") {
+		t.Fatalf("expected audit log to contain assistant input/output, got %s", got)
+	}
+}
