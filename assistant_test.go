@@ -84,7 +84,7 @@ func TestAuditLog_CapturesAssistantInputOutput(t *testing.T) {
 	buf := new(bytes.Buffer)
 	a.AuditLog = buf
 	err := a.Start()
-	if err != nil {
+	if !errors.Is(err, io.EOF) {
 		t.Fatal(err)
 	}
 	got := buf.String()

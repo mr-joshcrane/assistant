@@ -14,10 +14,11 @@ import (
 )
 
 type Assistant struct {
-	Oracle  *oracle.Oracle
-	Input   io.Reader
-	Output  io.Writer
-	History []QA
+	Oracle   *oracle.Oracle
+	Input    io.Reader
+	Output   io.Writer
+	AuditLog io.Writer
+	History  []QA
 }
 
 type QA struct {
