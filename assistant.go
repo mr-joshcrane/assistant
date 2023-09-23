@@ -13,9 +13,16 @@ import (
 )
 
 type Assistant struct {
-	Oracle *oracle.Oracle
-	Input  io.Reader
-	Output io.Writer
+	Oracle  *oracle.Oracle
+	Input   io.Reader
+	Output  io.Writer
+	History []QA
+}
+
+type QA struct {
+	Index    int
+	Question string
+	Answer   string
 }
 
 func NewAssistant(token string) *Assistant {
@@ -32,30 +39,12 @@ func (a *Assistant) Start() error {
 	a.Prompt("Hello, I am your assistant. How can I help you today?")
 	for scan.Scan() {
 		line := scan.Text()
-		if line == "exit" {
-			break
-		}
-		ctx, cancel := context.WithCancel(context.Background())
-		go func() {
-			sigChan := make(chan os.Signal, 1)
-			signal.Notify(sigChan, os.Interrupt)
-			<-sigChan
-			cancel()
-		}()
-
-		answer, err := a.Oracle.Ask(ctx, line)
+		err := a.Act(line)
 		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				a.Prompt("You cancelled the request, so I'll stop talking!")
-				continue
-			}
 			return err
 		}
-		a.Prompt(answer)
-		a.Remember(line, answer)
 	}
-	a.Prompt("Goodbye!")
-	return io.EOF
+	return scan.Err()
 }
 
 func (a *Assistant) Prompt(prompt string) {
@@ -63,5 +52,45 @@ func (a *Assistant) Prompt(prompt string) {
 }
 
 func (a *Assistant) Remember(question string, answer string) {
+	a.History = append(a.History, QA{
+		Index:    len(a.History) + 1,
+		Question: question,
+		Answer:   answer,
+	})
 	a.Oracle.GiveExample(question, answer)
+}
+
+func (a *Assistant) Act(line string) error {
+	switch line {
+	case "exit":
+		return a.Exit()
+	default:
+		return a.Ask(context.Background(), line)
+	}
+}
+
+func (a *Assistant) Ask(ctx context.Context, question string) error {
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt)
+		<-sigChan
+		cancel()
+	}()
+	answer, err := a.Oracle.Ask(ctx, question)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			a.Prompt("You cancelled the request, so I'll stop talking!")
+			return nil
+		}
+		return err
+	}
+	a.Prompt(answer)
+	a.Remember(question, answer)
+	return nil
+}
+
+func (a *Assistant) Exit() error {
+	fmt.Fprintln(a.Output, "ASSISTANT) Goodbye!")
+	return io.EOF
 }

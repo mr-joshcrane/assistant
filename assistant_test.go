@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"context"
+
 	"github.com/mr-joshcrane/assistant"
 	"github.com/mr-joshcrane/oracle"
 )
@@ -50,5 +52,27 @@ func TestAssistant_GivesAResponse(t *testing.T) {
 	got := a.Output.(*bytes.Buffer).String()
 	if !strings.Contains(got, "fixed response") {
 		t.Fatal("expected assistant to give a response")
+	}
+}
+
+func TestAsk_StopsTalkingWhenRequestCancelled(t *testing.T) {
+	t.Parallel()
+	a := newTestAssistant(t)
+	buf := new(bytes.Buffer)
+	a.Output = buf
+	a.Oracle = oracle.NewOracle("")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := a.Ask(ctx, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := io.ReadAll(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	if !strings.Contains(got, "cancelled the request") {
+		t.Fatalf("expected assistant to stop talking, got %s", got)
 	}
 }
