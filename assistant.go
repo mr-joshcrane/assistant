@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/fatih/color"
 	"github.com/mr-joshcrane/oracle"
 )
 
@@ -48,7 +49,9 @@ func (a *Assistant) Start() error {
 }
 
 func (a *Assistant) Prompt(prompt string) {
-	fmt.Fprint(a.Output, "ASSISTANT) ", prompt, "\nUSER) ")
+	formattedPrompt := fmt.Sprintf("ASSISTANT) %s", prompt)
+	color.New(color.FgGreen).Fprintln(a.Output, formattedPrompt)
+	color.New(color.FgYellow).Fprint(a.Output, "USER) ")
 }
 
 func (a *Assistant) Remember(question string, answer string) {
@@ -91,6 +94,6 @@ func (a *Assistant) Ask(ctx context.Context, question string) error {
 }
 
 func (a *Assistant) Exit() error {
-	fmt.Fprintln(a.Output, "ASSISTANT) Goodbye!")
+	color.New(color.FgGreen).Fprintln(a.Output, "ASSISTANT) Goodbye!")
 	return io.EOF
 }
