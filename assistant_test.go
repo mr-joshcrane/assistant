@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -79,16 +80,35 @@ func TestAsk_StopsTalkingWhenRequestCancelled(t *testing.T) {
 
 func TestAuditLog_CapturesAssistantInputOutput(t *testing.T) {
 	t.Parallel()
-	a := newTestAssistant(t)
-	a.Input = io.ReadWriter(bytes.NewBufferString("test\nexit\n"))
 	buf := new(bytes.Buffer)
-	a.AuditLog = buf
+
+	in := io.ReadWriter(bytes.NewBufferString("test\nexit\n"))
+	a := assistant.NewAssistant("", assistant.WithAuditLog(buf), assistant.WithInput(in), assistant.WithOutput(io.Discard))
+	a.Oracle = oracle.NewOracle("", oracle.WithDummyClient("fixed output", 200))
 	err := a.Start()
 	if !errors.Is(err, io.EOF) {
 		t.Fatal(err)
 	}
 	got := buf.String()
-	if !strings.Contains(got, "womple") {
-		t.Fatalf("expected audit log to contain assistant input/output, got %s", got)
+	if !strings.Contains(got, "test\nexit\n") {
+		t.Fatalf("expected audit log to contain user input, but it did not. Content: %s", got)
+	}
+	if !strings.Contains(got, "fixed output") {
+		t.Fatalf("expected audit log to contain assistant output, but it did not. Content: %s", got)
+	}
+}
+
+func TestFile_CreatesAuditLogInXDGDirectory(t *testing.T) {
+	t.Parallel()
+	tDir := t.TempDir()
+	original := os.Getenv("XDG_DATA_HOME")
+	defer os.Setenv("XDG_DATA_HOME", original)
+	os.Setenv("XDG_DATA_HOME", tDir)
+	audit, err := assistant.CreateAuditLog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if audit == nil {
+		t.Fatal("expected audit log to be created")
 	}
 }

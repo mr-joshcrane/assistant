@@ -27,16 +27,58 @@ type QA struct {
 	Answer   string
 }
 
-func NewAssistant(token string) *Assistant {
-	o := oracle.NewOracle(token)
-	return &Assistant{
-		Oracle: o,
-		Input:  os.Stdin,
-		Output: os.Stdout,
+type Options func(*Assistant) *Assistant
+
+func WithAuditLog(auditLog io.Writer) Options {
+	return func(a *Assistant) *Assistant {
+		a.AuditLog = auditLog
+		return a
 	}
 }
 
+func WithInput(input io.Reader) Options {
+	return func(a *Assistant) *Assistant {
+		a.Input = input
+		return a
+	}
+}
+
+func WithOutput(output io.Writer) Options {
+	return func(a *Assistant) *Assistant {
+		a.Output = output
+		return a
+	}
+}
+
+func NewAssistant(token string, opts ...Options) *Assistant {
+	a := &Assistant{
+		Oracle: oracle.NewOracle(token),
+	}
+	for _, opt := range opts {
+		a = opt(a)
+	}
+	if a.Output == nil {
+		a.Output = os.Stdout
+	}
+	if a.Input == nil {
+		a.Input = os.Stdin
+	}
+	if a.AuditLog == nil {
+		auditLog, err := CreateAuditLog()
+		if err != nil {
+			panic(err)
+		}
+		a.AuditLog = auditLog
+		fmt.Println(auditLog.Name())
+	}
+	a.Input = io.TeeReader(a.Input, a.AuditLog)
+	a.Output = NewTeeWriter(a.Output, a.AuditLog)
+	return a
+
+}
+
 func (a *Assistant) Start() error {
+
 	scan := bufio.NewScanner(a.Input)
 	a.Prompt("Hello, I am your assistant. How can I help you today?")
 	for scan.Scan() {
