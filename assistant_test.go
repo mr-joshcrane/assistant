@@ -98,17 +98,20 @@ func TestAuditLog_CapturesAssistantInputOutput(t *testing.T) {
 	}
 }
 
-func TestFile_CreatesAuditLogInXDGDirectory(t *testing.T) {
+func TestFile_CreatesAuditLogInHomeDirectory(t *testing.T) {
 	t.Parallel()
 	tDir := t.TempDir()
-	original := os.Getenv("XDG_DATA_HOME")
-	defer os.Setenv("XDG_DATA_HOME", original)
-	os.Setenv("XDG_DATA_HOME", tDir)
+	original := os.Getenv("HOME")
+	defer os.Setenv("HOME", original)
+	os.Setenv("HOME", tDir)
 	audit, err := assistant.CreateAuditLog()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if audit == nil {
 		t.Fatal("expected audit log to be created")
+	}
+	if !strings.Contains(audit.Name(), tDir) {
+		t.Fatalf("expected audit log to be created in %s, but it was not", tDir)
 	}
 }
