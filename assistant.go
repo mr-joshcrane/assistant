@@ -32,6 +32,8 @@ type Options func(*Assistant) *Assistant
 func WithAuditLog(auditLog io.Writer) Options {
 	return func(a *Assistant) *Assistant {
 		a.AuditLog = auditLog
+		a.Input = io.TeeReader(a.Input, auditLog)
+		a.Output = NewTeeWriter(a.Output, auditLog)
 		return a
 	}
 }

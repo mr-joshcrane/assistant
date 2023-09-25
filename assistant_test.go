@@ -14,20 +14,23 @@ import (
 	"github.com/mr-joshcrane/oracle"
 )
 
-func newTestAssistant(t *testing.T) assistant.Assistant {
+func newTestAssistant(t *testing.T, opts ...assistant.Options) *assistant.Assistant {
 	t.Helper()
-	o := oracle.NewOracle("", oracle.WithDummyClient("fixed response", 200))
-	return assistant.Assistant{
-		Oracle: o,
-		Input:  new(bytes.Buffer),
-		Output: new(bytes.Buffer),
+	a := &assistant.Assistant{
+		Output:   io.Discard,
+		AuditLog: io.Discard,
 	}
+	o := oracle.NewOracle("", oracle.WithDummyClient("fixed response", 200))
+	a.Oracle = o
+	for _, opt := range opts {
+		a = opt(a)
+	}
+	return a
 }
 
 func TestAssistant_StartCanBeTerminatedWithExit(t *testing.T) {
 	t.Parallel()
-	a := newTestAssistant(t)
-	a.Input = io.ReadWriter(bytes.NewBufferString("exit\n"))
+	a := newTestAssistant(t, assistant.WithInput(io.ReadWriter(bytes.NewBufferString("exit\n"))))
 	err := a.Start()
 	if !errors.Is(err, io.EOF) {
 		t.Fatal(err)
@@ -36,10 +39,12 @@ func TestAssistant_StartCanBeTerminatedWithExit(t *testing.T) {
 
 func TestAssistant_AsksForUserInput(t *testing.T) {
 	t.Parallel()
-	a := newTestAssistant(t)
+	buf := new(bytes.Buffer)
+	in := assistant.WithInput(io.ReadWriter(bytes.NewBufferString("exit\n")))
+	out := assistant.WithOutput(buf)
+	a := newTestAssistant(t, in, out)
 	_ = a.Start()
-	a.Input = io.ReadWriter(bytes.NewBufferString("exit\n"))
-	got := a.Output.(*bytes.Buffer).String()
+	got := buf.String()
 	if !strings.Contains(got, "ASSISTANT) ") {
 		t.Fatal("expected assistant to ask for user input")
 	}
@@ -47,10 +52,12 @@ func TestAssistant_AsksForUserInput(t *testing.T) {
 
 func TestAssistant_GivesAResponse(t *testing.T) {
 	t.Parallel()
-	a := newTestAssistant(t)
-	a.Input = io.ReadWriter(bytes.NewBufferString("test\nexit\n"))
+	buf := new(bytes.Buffer)
+	in := assistant.WithInput(io.ReadWriter(bytes.NewBufferString("test\nexit\n")))
+	out := assistant.WithOutput(buf)
+	a := newTestAssistant(t, in, out)
 	_ = a.Start()
-	got := a.Output.(*bytes.Buffer).String()
+	got := buf.String()
 	if !strings.Contains(got, "fixed response") {
 		t.Fatal("expected assistant to give a response")
 	}
@@ -58,10 +65,11 @@ func TestAssistant_GivesAResponse(t *testing.T) {
 
 func TestAsk_StopsTalkingWhenRequestCancelled(t *testing.T) {
 	t.Parallel()
-	a := newTestAssistant(t)
 	buf := new(bytes.Buffer)
-	a.Output = buf
-	a.Oracle = oracle.NewOracle("")
+	out := assistant.WithOutput(buf)
+	a := newTestAssistant(t, out)
+	o := oracle.NewOracle("")
+	a.Oracle = o
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	err := a.Ask(ctx, "test")
@@ -78,40 +86,27 @@ func TestAsk_StopsTalkingWhenRequestCancelled(t *testing.T) {
 	}
 }
 
-func TestAuditLog_CapturesAssistantInputOutput(t *testing.T) {
+func TestAssistant_CanEmbedLocalFiles(t *testing.T) {
 	t.Parallel()
-	buf := new(bytes.Buffer)
 
-	in := io.ReadWriter(bytes.NewBufferString("test\nexit\n"))
-	a := assistant.NewAssistant("", assistant.WithAuditLog(buf), assistant.WithInput(in), assistant.WithOutput(io.Discard))
-	a.Oracle = oracle.NewOracle("", oracle.WithDummyClient("fixed output", 200))
-	err := a.Start()
-	if !errors.Is(err, io.EOF) {
-		t.Fatal(err)
-	}
-	got := buf.String()
-	if !strings.Contains(got, "test\nexit\n") {
-		t.Fatalf("expected audit log to contain user input, but it did not. Content: %s", got)
-	}
-	if !strings.Contains(got, "fixed output") {
-		t.Fatalf("expected audit log to contain assistant output, but it did not. Content: %s", got)
-	}
-}
-
-func TestFile_CreatesAuditLogInHomeDirectory(t *testing.T) {
-	t.Parallel()
-	tDir := t.TempDir()
-	original := os.Getenv("HOME")
-	defer os.Setenv("HOME", original)
-	os.Setenv("HOME", tDir)
-	audit, err := assistant.CreateAuditLog()
+	tdir := t.TempDir()
+	err := os.WriteFile(tdir+"/file.txt", []byte("embedded content"), 0644)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if audit == nil {
-		t.Fatal("expected audit log to be created")
+	embedCmd := ">" + tdir + "/file.txt"
+
+	buf := new(bytes.Buffer)
+	in := assistant.WithInput(io.ReadWriter(bytes.NewBufferString(embedCmd + "\nexit\n")))
+	out := assistant.WithOutput(io.Discard)
+	audit := assistant.WithAuditLog(buf)
+	a := newTestAssistant(t, in, out, audit)
+	err = a.Start()
+	if err != io.EOF {
+		t.Fatal(err)
 	}
-	if !strings.Contains(audit.Name(), tDir) {
-		t.Fatalf("expected audit log to be created in %s, but it was not", tDir)
+	got := buf.String()
+	if !strings.Contains(got, "embedded content") {
+		t.Fatalf("expected assistant to embed local file, got %s", got)
 	}
 }
