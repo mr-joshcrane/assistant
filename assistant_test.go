@@ -88,7 +88,6 @@ func TestAsk_StopsTalkingWhenRequestCancelled(t *testing.T) {
 
 func TestAssistant_CanEmbedLocalFiles(t *testing.T) {
 	t.Parallel()
-
 	tdir := t.TempDir()
 	err := os.WriteFile(tdir+"/file.txt", []byte("embedded content"), 0644)
 	if err != nil {
@@ -114,5 +113,27 @@ func TestAssistant_CanEmbedLocalFiles(t *testing.T) {
 	got = a.History[0].Question
 	if got != "embedded content" {
 		t.Fatalf("expected assistant to embed local file contents, got %s", got)
+	}
+}
+
+func TestAssistant_CanForget(t *testing.T) {
+	t.Parallel()
+	buf := new(bytes.Buffer)
+	in := assistant.WithInput(io.ReadWriter(bytes.NewBufferString("/forget\nexit\n")))
+	out := assistant.WithOutput(buf)
+	a := newTestAssistant(t, in, out)
+	a.History = []assistant.QA{
+		{
+			Index:    0,
+			Question: "test question",
+			Answer:   "test answer",
+		},
+	}
+	err := a.Start()
+	if err != io.EOF {
+		t.Fatal(err)
+	}
+	if len(a.History) != 0 {
+		t.Fatal("expected assistant to forget all history")
 	}
 }
