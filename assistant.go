@@ -118,6 +118,8 @@ func (a *Assistant) Act(line string) error {
 		return a.Exit()
 	case strings.HasPrefix(line, ">"):
 		return a.LocalFileSystem(line)
+	case strings.HasPrefix(line, "/forget"):
+		return a.Forget()
 	default:
 		return a.Ask(context.Background(), line)
 	}
@@ -180,4 +182,11 @@ func (a *Assistant) LocalFileSystem(line string) error {
 	}
 	a.Prompt(fmt.Sprintf("Thanks for the examples!\n%s", allFiles))
 	return err
+}
+
+func (a *Assistant) Forget() error {
+	a.History = []QA{}
+	a.Prompt("I've forgotten everything we've talked about!")
+	a.Oracle.Reset()
+	return nil
 }
