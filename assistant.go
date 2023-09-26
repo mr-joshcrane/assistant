@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/mr-joshcrane/oracle"
@@ -80,7 +82,6 @@ func NewAssistant(token string, opts ...Options) *Assistant {
 }
 
 func (a *Assistant) Start() error {
-
 	scan := bufio.NewScanner(a.Input)
 	a.Prompt("Hello, I am your assistant. How can I help you today?")
 	for scan.Scan() {
@@ -100,6 +101,9 @@ func (a *Assistant) Prompt(prompt string) {
 }
 
 func (a *Assistant) Remember(question string, answer string) {
+	if a.History == nil {
+		a.History = []QA{}
+	}
 	a.History = append(a.History, QA{
 		Index:    len(a.History) + 1,
 		Question: question,
@@ -109,9 +113,11 @@ func (a *Assistant) Remember(question string, answer string) {
 }
 
 func (a *Assistant) Act(line string) error {
-	switch line {
-	case "exit":
+	switch {
+	case line == "exit":
 		return a.Exit()
+	case strings.HasPrefix(line, ">"):
+		return a.LocalFileSystem(line)
 	default:
 		return a.Ask(context.Background(), line)
 	}
@@ -141,4 +147,37 @@ func (a *Assistant) Ask(ctx context.Context, question string) error {
 func (a *Assistant) Exit() error {
 	color.New(color.FgGreen).Fprintln(a.Output, "ASSISTANT) Goodbye!")
 	return io.EOF
+}
+
+func (a *Assistant) LocalFileSystem(line string) error {
+	var files []os.DirEntry
+	err := filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if !strings.Contains(path, line[1:]) {
+			return nil
+		}
+		files = append(files, d)
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		data, err := io.ReadAll(f)
+		if err != nil {
+			return err
+		}
+		a.Remember(string(data), "File Contents of "+path)
+		return nil
+	})
+	allFiles := ""
+	for _, file := range files {
+		allFiles += "  > " + file.Name() + "\n"
+	}
+	a.Prompt(fmt.Sprintf("Thanks for the examples!\n%s", allFiles))
+	return err
 }

@@ -15,7 +15,6 @@ import (
 func TestAuditLog_CapturesAssistantInputOutput(t *testing.T) {
 	t.Parallel()
 	buf := new(bytes.Buffer)
-
 	in := io.ReadWriter(bytes.NewBufferString("test\nexit\n"))
 	a := assistant.NewAssistant("", assistant.WithAuditLog(buf), assistant.WithInput(in), assistant.WithOutput(io.Discard))
 	a.Oracle = oracle.NewOracle("", oracle.WithDummyClient("fixed output", 200))

@@ -3,6 +3,7 @@ package assistant_test
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -94,19 +95,28 @@ func TestAssistant_CanEmbedLocalFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	embedCmd := ">" + tdir + "/file.txt"
-
-	buf := new(bytes.Buffer)
-	in := assistant.WithInput(io.ReadWriter(bytes.NewBufferString(embedCmd + "\nexit\n")))
-	out := assistant.WithOutput(io.Discard)
-	audit := assistant.WithAuditLog(buf)
-	a := newTestAssistant(t, in, out, audit)
-	err = a.Start()
-	if err != io.EOF {
+	err = os.Chdir(tdir)
+	if err != nil {
 		t.Fatal(err)
 	}
-	got := buf.String()
-	if !strings.Contains(got, "embedded content") {
-		t.Fatalf("expected assistant to embed local file, got %s", got)
+	embedCmd := ">file.txt\n"
+	buf := bytes.NewBufferString(embedCmd)
+	in := assistant.WithInput(io.ReadWriter(buf))
+	buf2 := new(bytes.Buffer)
+	out := assistant.WithAuditLog(buf2)
+	a := newTestAssistant(t, in, out)
+	errChan := make(chan error)
+	go func() {
+		errChan <- a.Start()
+	}()
+	fmt.Fprintf(buf, "exit\n")
+	<-errChan
+	got := buf2.String()
+	if !strings.Contains(got, "  > file.txt") {
+		t.Fatalf("expected assistant to find and list the file, got %s", got)
+	}
+	got = a.History[0].Question
+	if got != "embedded content" {
+		t.Fatalf("expected assistant to embed local file contents, got %s", got)
 	}
 }
