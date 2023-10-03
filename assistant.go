@@ -116,6 +116,10 @@ func (a *Assistant) Act(line string) error {
 	switch {
 	case line == "exit":
 		return a.Exit()
+	case line == "-":
+		return a.SwitchGPT35Turbo()
+	case line == "+":
+		return a.SwitchGPT4()
 	case strings.HasPrefix(line, ">"):
 		return a.LocalFileSystem(line)
 	case strings.HasPrefix(line, "/forget"):
@@ -188,5 +192,17 @@ func (a *Assistant) Forget() error {
 	a.History = []QA{}
 	a.Prompt("I've forgotten everything we've talked about!")
 	a.Oracle.Reset()
+	return nil
+}
+
+func (a *Assistant) SwitchGPT35Turbo() error {
+	a.Oracle = oracle.WithGPT3_5Turbo()(a.Oracle)
+	a.Prompt("Switched to GPT3.5Turbo model, which is faster but less accurate.")
+	return nil
+}
+
+func (a *Assistant) SwitchGPT4() error {
+	a.Oracle = oracle.WithGPT4()(a.Oracle)
+	a.Prompt("Switched to GPT4 model, which is slower but deals with more complex problems.")
 	return nil
 }
