@@ -196,7 +196,7 @@ func (a *Assistant) Forget() error {
 }
 
 func (a *Assistant) SwitchGPT35Turbo() error {
-	a.Oracle = oracle.WithGPT3_5Turbo()(a.Oracle)
+	a.Oracle = oracle.WithGPT35Turbo()(a.Oracle)
 	a.Prompt("Switched to GPT3.5Turbo model, which is faster but less accurate.")
 	return nil
 }
