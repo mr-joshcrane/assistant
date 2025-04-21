@@ -11,7 +11,7 @@ import (
 	"context"
 
 	"github.com/mr-joshcrane/assistant"
-	"github.com/mr-joshcrane/oracle"
+	oracle "github.com/mr-joshcrane/goracle"
 )
 
 func newTestAssistant(t *testing.T, opts ...assistant.Options) *assistant.Assistant {

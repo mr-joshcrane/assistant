@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/mr-joshcrane/assistant"
-	"github.com/mr-joshcrane/oracle"
+	oracle "github.com/mr-joshcrane/goracle"
 )
 
 func TestAuditLog_CapturesAssistantInputOutput(t *testing.T) {

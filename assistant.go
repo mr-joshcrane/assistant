@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/mr-joshcrane/oracle"
+	oracle "github.com/mr-joshcrane/goracle"
 )
 
 type Assistant struct {
@@ -56,7 +56,7 @@ func WithOutput(output io.Writer) Options {
 
 func NewAssistant(token string, opts ...Options) *Assistant {
 	a := &Assistant{
-		Oracle: oracle.NewOracle(token),
+		Oracle: oracle.NewChatGPTOracle(token),
 	}
 	for _, opt := range opts {
 		a = opt(a)
@@ -116,10 +116,6 @@ func (a *Assistant) Act(line string) error {
 	switch {
 	case line == "exit":
 		return a.Exit()
-	case line == "-":
-		return a.SwitchGPT35Turbo()
-	case line == "+":
-		return a.SwitchGPT4()
 	case strings.HasPrefix(line, ">"):
 		return a.LocalFileSystem(line)
 	case strings.HasPrefix(line, "/forget"):
@@ -137,7 +133,7 @@ func (a *Assistant) Ask(ctx context.Context, question string) error {
 		<-sigChan
 		cancel()
 	}()
-	answer, err := a.Oracle.Ask(ctx, question)
+	answer, err := a.Oracle.AskWithContext(ctx, question)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			a.Prompt("You cancelled the request, so I'll stop talking!")
@@ -192,17 +188,5 @@ func (a *Assistant) Forget() error {
 	a.History = []QA{}
 	a.Prompt("I've forgotten everything we've talked about!")
 	a.Oracle.Reset()
-	return nil
-}
-
-func (a *Assistant) SwitchGPT35Turbo() error {
-	a.Oracle = oracle.WithGPT35Turbo()(a.Oracle)
-	a.Prompt("Switched to GPT3.5Turbo model, which is faster but less accurate.")
-	return nil
-}
-
-func (a *Assistant) SwitchGPT4() error {
-	a.Oracle = oracle.WithGPT4()(a.Oracle)
-	a.Prompt("Switched to GPT4 model, which is slower but deals with more complex problems.")
 	return nil
 }
